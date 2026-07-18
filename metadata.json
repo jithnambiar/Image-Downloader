@@ -1,0 +1,6 @@
+{
+  "name": "Bulk Image Downloader & Organizer",
+  "description": "Paste any website URL to scrape, filter, compress, dynamically rename, and organize images into custom subfolders. Supports client-side ZIP archival, detailed usage analytics, secure 2FA logins, and Google Drive & Dropbox backup integrations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
