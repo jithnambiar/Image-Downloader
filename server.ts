@@ -8,9 +8,16 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 
-// Polyfill __dirname and __filename for ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Polyfill __dirname and __filename safely for both ES Modules and CommonJS
+let _filename = '';
+let _dirname = '';
+try {
+  _filename = __filename;
+  _dirname = __dirname;
+} catch (e) {
+  _filename = fileURLToPath(import.meta.url);
+  _dirname = path.dirname(_filename);
+}
 
 /**
  * Scrapes popular platforms with intelligent extraction techniques.
