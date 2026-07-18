@@ -11,12 +11,23 @@ import { createServer as createViteServer } from 'vite';
 // Polyfill __dirname and __filename safely for both ES Modules and CommonJS
 let _filename = '';
 let _dirname = '';
-try {
+
+if (typeof __filename !== 'undefined') {
   _filename = __filename;
+} else if (typeof import.meta !== 'undefined' && import.meta.url) {
+  try {
+    _filename = fileURLToPath(import.meta.url);
+  } catch (e) {
+    _filename = '';
+  }
+}
+
+if (typeof __dirname !== 'undefined') {
   _dirname = __dirname;
-} catch (e) {
-  _filename = fileURLToPath(import.meta.url);
+} else if (_filename) {
   _dirname = path.dirname(_filename);
+} else {
+  _dirname = process.cwd();
 }
 
 /**
