@@ -12,11 +12,14 @@ import { createServer as createViteServer } from 'vite';
 let _filename = '';
 let _dirname = '';
 
-if (typeof __filename !== 'undefined') {
+if (typeof __filename === 'string' && __filename) {
   _filename = __filename;
-} else if (typeof import.meta !== 'undefined' && import.meta.url) {
+} else {
   try {
-    _filename = fileURLToPath(import.meta.url);
+    const meta = Function('return import.meta')();
+    if (meta && typeof meta.url === 'string') {
+      _filename = fileURLToPath(meta.url);
+    }
   } catch (e) {
     _filename = '';
   }
