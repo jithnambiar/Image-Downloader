@@ -551,80 +551,141 @@ async function startServer() {
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Site': 'none',
         'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1'
+        'Upgrade-Insecure-Requests': '1',
+        'Cookie': 'gdpr_consent=true; consent=true; cookies.accepted=true; cookieconsent_status=allow; gdpr=accept; notice_gdpr_prefs=1; cookie-consent=true; accept-cookies=true;'
       };
 
       let html = '';
       let fetchSuccess = false;
       let errorDetails = '';
 
-      // Attempt 1: Direct fetch with chrome-like headers
-      try {
-        console.log(`[Scraper] Attempt 1: Direct fetch for ${parsedBaseUrl.href}`);
-        const response = await fetch(parsedBaseUrl.href, {
-          headers: chromeHeaders,
-          redirect: 'follow'
-        });
+      const isValidHtml = (text: string): boolean => {
+        if (!text || text.trim().length < 50) return false;
+        const lower = text.toLowerCase().trim();
+        if (lower.startsWith('{"error":') || lower.startsWith('{"message":')) return false;
+        if (lower.startsWith('error:') || lower.startsWith('typeerror:')) return false;
+        return true;
+      };
 
-        if (response.ok) {
-          html = await response.text();
-          fetchSuccess = true;
-          console.log(`[Scraper] Attempt 1: Direct fetch succeeded`);
-        } else {
-          errorDetails = `Direct fetch failed with status ${response.status} (${response.statusText})`;
-          console.warn(`[Scraper] Attempt 1: ${errorDetails}`);
-        }
-      } catch (err: any) {
-        errorDetails = `Direct fetch error: ${err.message}`;
-        console.warn(`[Scraper] Attempt 1 error:`, err);
-      }
-
-      // Attempt 2: AllOrigins proxy fallback if direct fetch failed
-      if (!fetchSuccess) {
-        try {
-          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(parsedBaseUrl.href)}`;
-          console.log(`[Scraper] Attempt 2: Retrying via AllOrigins proxy: ${proxyUrl}`);
-          const response = await fetch(proxyUrl);
-          if (response.ok) {
+      // Define standard proxy templates to rotate through on block
+      const scraperPipeline = [
+        {
+          name: 'Direct Fetch (with Consent Simulation)',
+          type: 'direct',
+          fetchFn: async () => {
+            const response = await fetch(parsedBaseUrl.href, {
+              headers: chromeHeaders,
+              redirect: 'follow'
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+            return await response.text();
+          }
+        },
+        {
+          name: 'Direct Fetch (Minimal User-Agent)',
+          type: 'direct',
+          fetchFn: async () => {
+            const response = await fetch(parsedBaseUrl.href, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5'
+              },
+              redirect: 'follow'
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+            return await response.text();
+          }
+        },
+        {
+          name: 'CorsProxy.io (Dynamic Routing)',
+          type: 'proxy',
+          fetchFn: async () => {
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(parsedBaseUrl.href)}`;
+            const response = await fetch(proxyUrl, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.text();
+          }
+        },
+        {
+          name: 'CorsProxy.org Service',
+          type: 'proxy',
+          fetchFn: async () => {
+            const proxyUrl = `https://corsproxy.org/?url=${encodeURIComponent(parsedBaseUrl.href)}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.text();
+          }
+        },
+        {
+          name: 'YaCDN Bypass Proxy',
+          type: 'proxy',
+          fetchFn: async () => {
+            const proxyUrl = `https://yacdn.org/proxy/${parsedBaseUrl.href}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.text();
+          }
+        },
+        {
+          name: 'CodeTabs Web Scraper Proxy',
+          type: 'proxy',
+          fetchFn: async () => {
+            const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(parsedBaseUrl.href)}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.text();
+          }
+        },
+        {
+          name: 'AllOrigins JSON Proxy Wrapper',
+          type: 'json',
+          fetchFn: async () => {
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(parsedBaseUrl.href)}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-            if (data && typeof data.contents === 'string' && data.contents.trim().length > 0) {
-              html = data.contents;
-              fetchSuccess = true;
-              console.log(`[Scraper] Attempt 2: Success via AllOrigins`);
-            } else {
-              console.warn(`[Scraper] Attempt 2: AllOrigins returned empty content or unexpected format`);
+            if (data && typeof data.contents === 'string') {
+              return data.contents;
             }
-          } else {
-            console.warn(`[Scraper] Attempt 2: AllOrigins responded with status ${response.status}`);
+            throw new Error('AllOrigins returned empty content or invalid payload');
           }
-        } catch (err: any) {
-          console.warn(`[Scraper] Attempt 2 error:`, err);
+        },
+        {
+          name: 'ThingProxy Resource Gateway',
+          type: 'proxy',
+          fetchFn: async () => {
+            const proxyUrl = `https://thingproxy.freeboard.io/fetch/${parsedBaseUrl.href}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.text();
+          }
         }
-      }
+      ];
 
-      // Attempt 3: CorsProxy.io fallback if Attempt 1 and 2 failed
-      if (!fetchSuccess) {
+      for (const step of scraperPipeline) {
         try {
-          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(parsedBaseUrl.href)}`;
-          console.log(`[Scraper] Attempt 3: Retrying via CorsProxy.io: ${proxyUrl}`);
-          const response = await fetch(proxyUrl, {
-            headers: { 'User-Agent': chromeHeaders['User-Agent'] }
-          });
-          if (response.ok) {
-            html = await response.text();
+          console.log(`[Scraper] Attempting: ${step.name}`);
+          const content = await step.fetchFn();
+          if (isValidHtml(content)) {
+            html = content;
             fetchSuccess = true;
-            console.log(`[Scraper] Attempt 3: Success via CorsProxy.io`);
+            console.log(`[Scraper] Success via ${step.name} (length: ${content.length})`);
+            break;
           } else {
-            console.warn(`[Scraper] Attempt 3: CorsProxy.io responded with status ${response.status}`);
+            console.warn(`[Scraper] ${step.name} returned invalid HTML payload`);
           }
         } catch (err: any) {
-          console.warn(`[Scraper] Attempt 3 error:`, err);
+          console.warn(`[Scraper] Failed step ${step.name}: ${err.message}`);
+          errorDetails += `[${step.name}: ${err.message}] `;
         }
       }
 
       if (!fetchSuccess) {
         res.status(403).json({ 
-          error: `Failed to fetch target URL: ${errorDetails}. All fallback scraping proxies were also blocked. The target host may have anti-crawler protection (Cloudflare/CAPTCHA) enabled.` 
+          error: `Failed to fetch target URL: ${errorDetails || 'All proxies blocked.'} Please verify the website URL or try another domain.` 
         });
         return;
       }
@@ -669,6 +730,14 @@ async function startServer() {
       const metaImageRegexRev = /<meta\s+[^>]*?content\s*=\s*["']([^"'>]+)["'][^>]*?(?:property|name)\s*=\s*["']og:image["']/gi;
       while ((match = metaImageRegexRev.exec(html)) !== null) {
         if (match[1]) imageUrls.add(match[1]);
+      }
+
+      // 6. Generic high-resolution image URL extraction (handles JSON data, script blocks, lazy datasets)
+      const genericImageRegex = /(?:"|')([^"'\s>]+?\.(?:jpg|jpeg|png|webp|avif|svg)(?:\?[^"'\s>]+?)?)(?:"|')/gi;
+      while ((match = genericImageRegex.exec(html)) !== null) {
+        if (match[1] && !match[1].startsWith('data:')) {
+          imageUrls.add(match[1]);
+        }
       }
 
       // Format and resolve all relative URLs

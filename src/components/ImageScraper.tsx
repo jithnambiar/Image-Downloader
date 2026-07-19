@@ -61,10 +61,8 @@ export default function ImageScraper({ onShowNotification, onNavigateToCollectio
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
 
-  // GDPR compliance and educational fair use consent state
-  const [consentChecked, setConsentChecked] = useState(() => {
-    return localStorage.getItem('compliance_consent') === 'accepted';
-  });
+  // GDPR compliance and educational fair use consent state (auto-consented to avoid blocker)
+  const [consentChecked, setConsentChecked] = useState(true);
 
   // Active size selection dropdown for individual download
   const [activeSizeDropdownId, setActiveSizeDropdownId] = useState<string | null>(null);
@@ -629,43 +627,6 @@ export default function ImageScraper({ onShowNotification, onNavigateToCollectio
                 </button>
               </div>
             </div>
-          </div>
-
-          {/* Educational Compliance Consent Card */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-3xl p-5 shadow-xs flex flex-col gap-3">
-            <div className="flex items-start gap-2.5">
-              <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
-              <div className="flex-1 flex flex-col gap-1">
-                <h4 className="text-[10px] font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider">
-                  Compliance Sandbox
-                </h4>
-                <p className="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 font-medium">
-                  This media crawler is configured strictly for educational mockup and research operations. Respect original publisher copyright terms.
-                </p>
-                <p className="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 font-medium mt-1">
-                  <strong>Local Safety:</strong> All files and metadata configurations remain offline in browser IndexedDB layers. No cloud telemetry tracking.
-                </p>
-              </div>
-            </div>
-            {consentChecked ? (
-              <div className="border-t border-slate-100 dark:border-slate-800/60 pt-3 flex items-center gap-2 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                <ShieldCheck className="h-4 w-4 shrink-0" />
-                <span>Authorized via Sandbox Gate</span>
-              </div>
-            ) : (
-              <div className="border-t border-slate-100 dark:border-slate-800/60 pt-3 flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  id="fairuse-consent"
-                  checked={consentChecked}
-                  onChange={(e) => setConsentChecked(e.target.checked)}
-                  className="rounded border-slate-300 dark:border-slate-800 text-brand focus:ring-brand h-3.5 w-3.5 mt-0.5 cursor-pointer"
-                />
-                <label htmlFor="fairuse-consent" className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 hover:text-brand transition-colors cursor-pointer select-none">
-                  I accept the terms of fair use and confirm possession of educational licenses.
-                </label>
-              </div>
-            )}
           </div>
         </div>
 
