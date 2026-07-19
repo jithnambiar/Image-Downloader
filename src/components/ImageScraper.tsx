@@ -158,10 +158,17 @@ export default function ImageScraper({ onShowNotification, onNavigateToCollectio
 
     try {
       const response = await fetch(`/api/scrape?url=${encodeURIComponent(queryUrl)}`);
-      if (!response.ok) {
-        throw new Error(`Failed to scrape target URL (HTTP ${response.status})`);
+      let data: any = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        // Not JSON
       }
-      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMsg = data?.error || `Failed to scrape target URL (HTTP ${response.status})`;
+        throw new Error(errorMsg);
+      }
       
       if (data.error) {
         throw new Error(data.error);

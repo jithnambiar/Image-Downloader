@@ -539,19 +539,95 @@ async function startServer() {
         return;
       }
 
-      const response = await fetch(parsedBaseUrl.href, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-        }
-      });
+      const chromeHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'max-age=0',
+        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1'
+      };
 
-      if (!response.ok) {
-        res.status(response.status).json({ error: `Failed to fetch target URL: ${response.statusText}` });
-        return;
+      let html = '';
+      let fetchSuccess = false;
+      let errorDetails = '';
+
+      // Attempt 1: Direct fetch with chrome-like headers
+      try {
+        console.log(`[Scraper] Attempt 1: Direct fetch for ${parsedBaseUrl.href}`);
+        const response = await fetch(parsedBaseUrl.href, {
+          headers: chromeHeaders,
+          redirect: 'follow'
+        });
+
+        if (response.ok) {
+          html = await response.text();
+          fetchSuccess = true;
+          console.log(`[Scraper] Attempt 1: Direct fetch succeeded`);
+        } else {
+          errorDetails = `Direct fetch failed with status ${response.status} (${response.statusText})`;
+          console.warn(`[Scraper] Attempt 1: ${errorDetails}`);
+        }
+      } catch (err: any) {
+        errorDetails = `Direct fetch error: ${err.message}`;
+        console.warn(`[Scraper] Attempt 1 error:`, err);
       }
 
-      const html = await response.text();
+      // Attempt 2: AllOrigins proxy fallback if direct fetch failed
+      if (!fetchSuccess) {
+        try {
+          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(parsedBaseUrl.href)}`;
+          console.log(`[Scraper] Attempt 2: Retrying via AllOrigins proxy: ${proxyUrl}`);
+          const response = await fetch(proxyUrl);
+          if (response.ok) {
+            const data = await response.json();
+            if (data && typeof data.contents === 'string' && data.contents.trim().length > 0) {
+              html = data.contents;
+              fetchSuccess = true;
+              console.log(`[Scraper] Attempt 2: Success via AllOrigins`);
+            } else {
+              console.warn(`[Scraper] Attempt 2: AllOrigins returned empty content or unexpected format`);
+            }
+          } else {
+            console.warn(`[Scraper] Attempt 2: AllOrigins responded with status ${response.status}`);
+          }
+        } catch (err: any) {
+          console.warn(`[Scraper] Attempt 2 error:`, err);
+        }
+      }
+
+      // Attempt 3: CorsProxy.io fallback if Attempt 1 and 2 failed
+      if (!fetchSuccess) {
+        try {
+          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(parsedBaseUrl.href)}`;
+          console.log(`[Scraper] Attempt 3: Retrying via CorsProxy.io: ${proxyUrl}`);
+          const response = await fetch(proxyUrl, {
+            headers: { 'User-Agent': chromeHeaders['User-Agent'] }
+          });
+          if (response.ok) {
+            html = await response.text();
+            fetchSuccess = true;
+            console.log(`[Scraper] Attempt 3: Success via CorsProxy.io`);
+          } else {
+            console.warn(`[Scraper] Attempt 3: CorsProxy.io responded with status ${response.status}`);
+          }
+        } catch (err: any) {
+          console.warn(`[Scraper] Attempt 3 error:`, err);
+        }
+      }
+
+      if (!fetchSuccess) {
+        res.status(403).json({ 
+          error: `Failed to fetch target URL: ${errorDetails}. All fallback scraping proxies were also blocked. The target host may have anti-crawler protection (Cloudflare/CAPTCHA) enabled.` 
+        });
+        return;
+      }
       const imageUrls = new Set<string>();
 
       // 1. Find standard img tags (src, data-src, data-lazy, etc.)
